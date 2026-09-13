@@ -1,0 +1,20 @@
+---
+alwaysApply: true
+---
+
+---
+
+description: Read all project roadmap files and context before executing the next phase
+globs: .cursorrules, prisma/schema.prisma, docs/\*.md
+
+---
+
+# PROJECT GOAL & PHASE EXECUTION CONTEXT
+
+When the user types `/goal`, execute the following workflow automatically:
+
+1. **Scan Project Files**: Read and analyze `.cursorrules`, `prisma/schema.prisma`, and any environment configuration files (`.env.example`).
+2. **Identify Active Phase**: Check which Phase is currently marked as `in_progress` or `pending` in the roadmap sequence (Phase 1 -> Phase 6).
+3. **Verify Dependencies**: Ensure all prerequisite tasks from preceding phases are fully fulfilled before generating code.
+4. **Strict Isolation**: Do NOT implement features from future phases. Focus strictly on the current step.
+5. **Output**: State the current phase being executed, list the tasks to be completed, and write clean, modular, production-ready TypeScript/Prisma code matching the specified stack.

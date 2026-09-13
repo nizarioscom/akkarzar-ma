@@ -1,0 +1,177 @@
+/goal Execute Full System Completion Pipeline (Phase 3 through Phase 6) autonomously and continuously based on .cursorrules and system requirements.
+
+---
+
+### EXECUTIVE DIRECTIVE & EXECUTION PROTOCOL
+
+You are operating in FULL AUTOMATION MODE. Do NOT stop for intermediate human approvals between phases unless an unrecoverable syntax/compilation error occurs. Execute Phase 3, Phase 4, Phase 5, and Phase 6 sequentially.
+
+After completing each Phase, automatically run system validation (`npx prisma validate` and `npx tsc --noEmit`), and if zero errors are found, immediately proceed to the next Phase until Phase 6 is 100% finished.
+
+---
+
+### PHASE-BY-PHASE EXECUTION REQUIREMENTS
+
+#### 📍 PHASE 3: BUSINESS LOGIC ENGINE & OCR PIPELINE
+
+1. **Financial Calculator Engine**:
+   - Create `src/lib/calculators/exitCalculator.ts`.
+   - Implement `calculateExitFinancials()` handling:
+     - Seller Net Refund (100% of paid amount, 0% fee).
+     - Buyer Platform Fee (1.25% / 125 bps).
+     - Developer cancellation penalty comparison (15% standard vs 0% exit).
+     - Moroccan notary & registration tax estimation (_Frais de notaire et d'enregistrement_).
+2. **OCR & Document Validation Pipeline**:
+   - Create `src/lib/documents/ocrPipeline.ts` for parsing `CONTRACT_RESERVATION` and `BANK_PAYMENT_RECEIPT`.
+   - Extract total price, paid amounts, and match confidence scores.
+3. **Encrypted S3 Storage Helper**:
+   - Implement server-side AES-256-GCM stream encryption prior to S3/OVH upload.
+
+#### 📍 PHASE 4: SECURE APIs & WORKFLOW AUTOMATION
+
+1. **Zod Validated API Routes**:
+   - Create robust endpoints for Listing submission, Document upload queue, and Promoter/Notary review actions.
+   - Enforce Zod schemas and strict input sanitization on all POST/PATCH requests.
+2. **Cession Workflow State Machine**:
+   - Implement status transitions: `DRAFT` -> `PENDING_DOCS_VERIFICATION` -> `PROMOTER_APPROVAL_PENDING` -> `NOTARY_REVIEW` -> `LIVE` / `RESERVED` / `COMPLETED`.
+3. **Notification System Setup**:
+   - Build `src/lib/notifications/whatsapp.ts` for automated status updates via WhatsApp Business API webhook events.
+
+#### 📍 PHASE 5: FRONTEND UX/UI & DASHBOARDS (RTL/LTR Support)
+
+1. **Public Marketplace & Interactive Calculator**:
+   - Landing page + Old-Price VEFA Marketplace with filtering.
+   - Interactive Client-Side Exit Calculator with visual savings breakdown.
+2. **Seller Suite**:
+   - Multi-step Document Upload Wizard.
+   - Silent Exit Toggle and real-time Cession Tracker.
+3. **Buyer Dashboard**:
+   - Opportunity Reservation Hold System (Integration placeholder for CMI payment hold).
+4. **B2B Dashboards (Promoter & Notary)**:
+   - Dedicated review queues for Developer Approvals and Notary Attestations.
+
+#### 📍 PHASE 6: AUDIT LOGGING, TESTING & COMPLIANCE
+
+1. **Audit Logger**:
+   - Build immutable audit logging system for all decrypted PII access attempts.
+2. **Testing Suite**:
+   - Write Unit tests for `exitCalculator` and Integration tests for state machine transitions.
+3. **Legal Compliance & CNDP Terms**:
+   - Generate production-ready Terms of Service (CGU) & Privacy Policy tailored to Moroccan Laws (Law 107.12, Article 4 Real Rights Code, Law 09.08).
+
+---
+
+### TERMINATION CRITERIA
+
+Stop execution ONLY when Phase 6 is complete, all tests pass, TypeScript compilation succeeds with zero errors, and all files are fully generated and ready for production deployment. Begin Phase 3 immediately.
+
+/goal Execute UI Refinement, Moroccan Localization (AqarExit.ma Landing Page), and Go-Live Readiness Suite.
+
+---
+
+### EXECUTIVE DIRECTIVE
+
+Phases 1 through 6 of the core system architecture are successfully built. You are now instructed to execute the **UI/UX Refinement & Production Launch Preparation Phase**. Refine the public-facing application using Next.js App Router, Tailwind CSS, Shadcn UI, and Lucide Icons to deliver an elite Moroccan PropTech landing page and frontend experience.
+
+---
+
+### REQUIRED TASKS & IMPLEMENTATION STEPS
+
+#### 1. MOROCCAN LANDING PAGE & HERO SECTION (`src/app/[locale]/page.tsx`)
+
+- **Adaptation**: Re-architect the showcase page from the Egyptian template to the Moroccan market context.
+- **Hero Messaging**:
+  - Main Headline: "تنازل عن عقد VEFA بسعر التكلفة، تحت رقابة الموثق."
+  - Sub-headline: Emphasize Moroccan Law 107.12 (VEFA) and Article 4 of the Real Rights Code (Notary Supervision).
+  - Primary CTAs: "قـدّر تكلفة الخروج" (Anchor to Calculator) and "استعرض الفرص" (Link to Marketplace).
+- **Localization & Currency**:
+  - Default Currency: Dirham (`MAD` / `د.م.`).
+  - Default Locales: Arabic (`AR` - RTL) with toggle for French (`FR` - LTR).
+
+#### 2. INTERACTIVE EXIT CALCULATOR WIDGET (`src/components/calculator/ExitCalculatorWidget.tsx`)
+
+- Build a client-side component integrated with `src/lib/calculators/exitCalculator.ts`.
+- **Inputs**: Total Contract Price (`MAD`) and Total Paid Amount (`MAD`).
+- **Outputs Visuals**:
+  - Red Card: Estimated Promoter Cancellation Penalty (Standard 15% loss).
+  - Green Card: Net Cash Refund via AqarExit.ma (100% paid amount recovered).
+  - Fee Notice: Explicitly display "0 DH commission on Seller" & "1.25% fee on Buyer at Notary settlement".
+
+#### 3. COMPARISON & VALUE PROPOSITION TABLE (`src/components/sections/ComparisonTable.tsx`)
+
+- Implement a modern side-by-side comparison matrix:
+  - **Traditional Resell (_البيع التقليدي_)**: High Overprice, Unverified Documents, Broker Fees from both sides, High Risk of Cancellation Penalties.
+  - **AqarExit.ma (_عقار إكزت المغرب_)**: 0% Overprice, Mandatory Notary Verification, 0 DH Seller Fee, Complete Privacy (_Silent Exit_).
+
+#### 4. B2B PORTAL ACCESS CARDS (`src/components/sections/B2BSpace.tsx`)
+
+- Create clear entry points for B2B partners:
+  - **Promoters (_المنعشون العقاريون_)**: Direct login/action to review and approve Cession requests safely.
+  - **Notary Partners (_الموثقون المعتمدون_)**: Access queue to verify contract authenticity and sign attestations.
+
+#### 5. SEO, CNDP PRIVACY FOOTER & PRODUCTION VERIFICATION
+
+- Add metadata tags for Moroccan Real Estate and VEFA terms.
+- **Footer**: Include official compliance statements for CNDP (Law 09.08) and Law 107.12.
+- **Build Validation**: Run `npx tsc --noEmit` and `npm run build` to guarantee zero frontend build errors.
+
+---
+
+### TERMINATION CRITERIA
+
+Stop execution ONLY when the landing page, interactive calculator, and bilingual layout are completely generated, fully responsive, zero TypeScript errors exist, and the project passes `npm run build`. Start immediately.
+  
+  /goal Rename project to "AkkarZar.ma" (عقار زار) and implement AI Agent Integration + Professional Footer.
+
+---
+### EXECUTIVE DIRECTIVE
+1. Update branding from AqarExit to **AkkarZar.ma** (عقار زار) across all public pages, metadata, and components.
+2. Integrate an AI Exit Advisor component and erect a production-grade, legally compliant footer.
+
+---
+
+### REQUIRED TASKS
+
+#### 1. BRANDING & NAMING UPDATE
+- Search and update all occurrences of "Aqar Exit" / "AqarExit" to **AkkarZar.ma** / **عقار زار**.
+- Update metadata titles, page headers, and footer logos accordingly.
+
+#### 2. AI AGENT WIDGET INTEGRATION (`src/components/ai/AkkarZarAIAgent.tsx`)
+- Create a floating AI Chatbot widget named **"مساعد عقار زار الذكي"**.
+- Capabilities to simulate/handle:
+  - Instant contract financial breakdown based on user prompts.
+  - Interactive Q&A regarding VEFA Law 107.12 and Notary steps.
+  - Multi-language support (Arabic AR / French FR).
+
+#### 3. PROFESSIONAL COMPLIANT FOOTER (`src/components/layout/Footer.tsx`)
+- Implement a 4-column modern dark/slate footer containing:
+  - **Col 1 (Brand & Mission)**: AkkarZar.ma logo, brief mission, and CNDP / Security compliance badges.
+  - **Col 2 (Services & Tools)**: Direct links to Exit Calculator, Old-Price Marketplace, Seller Suite, Buyer Suite.
+  - **Col 3 (B2B Portals)**: Entry links for Developers (Promoters) and Notaries.
+  - **Col 4 (Legal Framework)**: Link to Terms of Service, Privacy Policy (Law 09.08), and VEFA guidelines.
+- **Bottom Bar**: Copyright notice © 2026 AkkarZar.ma + Positive regulatory statement regarding Notary final authority under Article 4 of Real Rights Code.
+
+---
+
+### VERIFICATION
+- Run `npx tsc --noEmit` to ensure no broken imports or missing types exist after renaming.
+- Ensure the floating AI widget and redesigned footer look seamless on `http://localhost:3000/ar`.’
+
+/goal Create an automated deployment script for AkkarZar.ma targeting the VPS environment via PM2 and Nginx.
+
+---
+### REQUIREMENTS
+1. Generate a `deploy.sh` script in the root directory that handles:
+   - Git pull & dependencies installation (`npm ci`).
+   - Environment file verification (`.env.production`).
+   - Production build generation (`npm run build`).
+   - PM2 service startup on port **3012** with name `akkarzar-app`.
+2. Generate an Nginx configuration snippet (`akkarzar.ma.conf`) listening on domain `akkarzar.ma` and forwarding to `http://127.0.0.1:3012`.
+
+/goal Run zero-error production build check and generate production deployment checklist.
+
+---
+### TASKS
+1. Execute `npx tsc --noEmit` to confirm zero TypeScript type mismatches.
+2. Run `npm run build` locally to verify Next.js App Router optimization, static generation, and env fallback integrity.
+3. Verify that all environment variables accessed in code fall back gracefully or report explicit runtime missing-var warnings.

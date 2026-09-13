@@ -1,0 +1,319 @@
+// AqarExit.ma — Phase 1 data layer (PostgreSQL / Supabase)
+//
+// User.id MUST equal Supabase auth.users.id (UUID).
+// Prisma cannot declare a relation into the `auth` schema; apply
+// prisma/sql/0001_user_auth_users_fk.sql after the first migrate.
+// Profile rows are created by `on_auth_user_created` (prisma/sql/0002_on_auth_user_created.sql).
+// Apply prisma/sql/0001–0003 after migrate. Do not insert users independently of auth.users.
+// Authorization role lives on public.users and in auth raw_app_meta_data — never user_metadata.
+//
+// Sensitive identity and contract payloads are AES-256-GCM ciphertext only.
+// Never store plaintext CIN or contract legal text.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum UserRole {
+  BUYER
+  SELLER
+  DEVELOPER_PROMOTER
+  NOTARY_PARTNER
+  ADMIN
+}
+
+enum ListingStatus {
+  DRAFT
+  PENDING_DOCS_VERIFICATION
+  PROMOTER_APPROVAL_PENDING
+  NOTARY_REVIEW
+  LIVE
+  RESERVED
+  COMPLETED
+  REJECTED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum ContractType {
+  RESERVATION
+  VEFA_SALE
+  CESSION
+}
+
+enum TransactionStatus {
+  INITIATED
+  AWAITING_PAYMENT
+  PAYMENT_RECEIVED
+  ESCROW_HELD
+  SETTLED
+  CANCELLED
+  FAILED
+}
+
+enum DocumentType {
+  CIN
+  CONTRACT_RESERVATION
+  BANK_PAYMENT_RECEIPT
+  PROMOTER_AUTHORIZATION
+  NOTARY_ATTESTATION
+  OTHER
+}
+
+enum PropertyType {
+  APARTMENT
+  VILLA
+  LAND
+  COMMERCIAL
+  OFFICE
+}
+
+enum Locale {
+  AR
+  FR
+}
+
+/// Public profile mapped 1:1 to auth.users. CIN is ciphertext only.
+model User {
+  id            String    @id @db.Uuid
+  role          UserRole
+  locale        Locale    @default(FR)
+  phoneE164     String?
+  displayName   String?
+  cndpConsentAt DateTime?
+  isActive      Boolean   @default(true)
+
+  cinCiphertext Bytes?
+  cinIv         Bytes?
+  cinAuthTag    Bytes?
+
+  developerCompanyId String?           @db.Uuid
+  developerCompany   DeveloperCompany? @relation(fields: [developerCompanyId], references: [id])
+  notaryOfficeId     String?           @db.Uuid
+  notaryOffice       NotaryOffice?     @relation(fields: [notaryOfficeId], references: [id])
+
+  listingsSold         Listing[]           @relation("ListingSeller")
+  listingsReserved     Listing[]           @relation("ListingReservedBuyer")
+  documentsUploaded    Document[]
+  approvalsReviewed    DeveloperApproval[]
+  transactionsAsBuyer  Transaction[]       @relation("TransactionBuyer")
+  transactionsAsSeller Transaction[]       @relation("TransactionSeller")
+  auditLogs            AuditLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([role])
+  @@map("users")
+}
+
+model DeveloperCompany {
+  id        String  @id @default(uuid()) @db.Uuid
+  legalName String
+  city      String
+  ice       String?
+  rc        String?
+  isActive  Boolean @default(true)
+
+  staff     User[]
+  listings  Listing[]
+  approvals DeveloperApproval[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("developer_companies")
+}
+
+model NotaryOffice {
+  id         String  @id @default(uuid()) @db.Uuid
+  officeName String
+  city       String
+  licenseRef String?
+  isActive   Boolean @default(true)
+
+  staff            User[]
+  assignedListings Listing[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("notary_offices")
+}
+
+/// VEFA exit listing. silentExit defaults true — never expose seller identity publicly.
+model Listing {
+  id     String        @id @default(uuid()) @db.Uuid
+  status ListingStatus @default(DRAFT)
+
+  sellerId String @db.Uuid
+  seller   User   @relation("ListingSeller", fields: [sellerId], references: [id])
+
+  developerCompanyId String            @db.Uuid
+  developerCompany   DeveloperCompany  @relation(fields: [developerCompanyId], references: [id])
+
+  assignedNotaryOfficeId String?       @db.Uuid
+  assignedNotaryOffice   NotaryOffice? @relation(fields: [assignedNotaryOfficeId], references: [id])
+
+  reservedByBuyerId String? @db.Uuid
+  reservedByBuyer   User?   @relation("ListingReservedBuyer", fields: [reservedByBuyerId], references: [id])
+
+  silentExit   Boolean      @default(true)
+  title        String
+  city         String
+  district     String?
+  propertyType PropertyType
+  unitReference String?
+
+  totalContractPrice Decimal @db.Decimal(14, 2)
+  amountPaid         Decimal @db.Decimal(14, 2)
+  currency           String  @default("MAD") @db.VarChar(3)
+
+  reservationExpiresAt DateTime?
+  rejectionReason      String?
+  completedAt          DateTime?
+
+  approvals    DeveloperApproval[]
+  contracts    Contract[]
+  transactions Transaction[]
+  documents    Document[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([sellerId])
+  @@index([city])
+  @@map("listings")
+}
+
+/// Promoter cession approval history (Law 107.12). 1:N so a listing can be resubmitted after rejection.
+model DeveloperApproval {
+  id String @id @default(uuid()) @db.Uuid
+
+  listingId String  @db.Uuid
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  companyId String            @db.Uuid
+  company   DeveloperCompany  @relation(fields: [companyId], references: [id])
+
+  reviewerUserId String? @db.Uuid
+  reviewer       User?   @relation(fields: [reviewerUserId], references: [id])
+
+  status    ApprovalStatus @default(PENDING)
+  note      String?
+  decidedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, status])
+  @@map("developer_approvals")
+}
+
+/// Reservation / VEFA / cession contract. Legal payload is AES-256-GCM only.
+model Contract {
+  id String @id @default(uuid()) @db.Uuid
+
+  listingId String       @db.Uuid
+  listing   Listing      @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  type      ContractType
+
+  referenceNumber String
+  signedAt        DateTime?
+  totalPrice      Decimal   @db.Decimal(14, 2)
+  amountPaid      Decimal   @db.Decimal(14, 2)
+
+  payloadCiphertext Bytes?
+  payloadIv         Bytes?
+  payloadAuthTag    Bytes?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([listingId, type, referenceNumber])
+  @@map("contracts")
+}
+
+/// Platform settlement. Buyer fee 1.25% (125 bps); seller fee 0%.
+model Transaction {
+  id String @id @default(uuid()) @db.Uuid
+
+  listingId String  @db.Uuid
+  listing   Listing @relation(fields: [listingId], references: [id])
+
+  buyerId String @db.Uuid
+  buyer   User   @relation("TransactionBuyer", fields: [buyerId], references: [id])
+  sellerId String @db.Uuid
+  seller   User   @relation("TransactionSeller", fields: [sellerId], references: [id])
+
+  grossAmount        Decimal            @db.Decimal(14, 2)
+  platformFeeBps     Int                @default(125)
+  sellerFeeBps       Int                @default(0)
+  platformFeeAmount  Decimal            @db.Decimal(14, 2)
+  status             TransactionStatus  @default(INITIATED)
+  gatewayRef         String?
+  paidAt             DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, status])
+  @@map("transactions")
+}
+
+/// Object-storage pointers for client-side encrypted files. No plaintext blobs in Postgres.
+model Document {
+  id String @id @default(uuid()) @db.Uuid
+
+  listingId String  @db.Uuid
+  listing   Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  uploadedById String @db.Uuid
+  uploadedBy   User   @relation(fields: [uploadedById], references: [id])
+
+  type               DocumentType
+  storageKey         String
+  sha256Ciphertext   String
+  encryptionIv       Bytes
+  encryptionAuthTag  Bytes
+  mimeType           String?
+  byteSize           Int?
+  isVerified         Boolean   @default(false)
+  verifiedAt         DateTime?
+  ocrExtractedJson   Json?
+  ocrConfidence      Decimal?  @db.Decimal(5, 4)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([listingId, type])
+  @@map("documents")
+}
+
+/// Immutable CNDP access trail. Application code inserts only; rows are never updated.
+model AuditLog {
+  id           String   @id @default(uuid()) @db.Uuid
+  actorId      String?  @db.Uuid
+  actor        User?    @relation(fields: [actorId], references: [id])
+  action       String
+  resourceType String
+  resourceId   String
+  reason       String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+
+  @@index([resourceType, resourceId])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
+}
